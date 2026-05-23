@@ -63,9 +63,9 @@ invoke 直後に以下を Read:
 - 既知 CVE のある dependency (lockfile を読んで `npm audit` / `pip-audit` 相当を mental check)
 - 削除済 maintainer / unmaintained package への依存
 
-## 観点漏れ防止 (最低 3 件 Critical 出すために)
+## 観点漏れ防止 (viewpoint A-H 網羅性、v0.2.0)
 
-Tier-0 で 5+ viewpoint を列挙する際、上記 A-H から選ぶ。1 つでも対象外と判定する場合は **理由** を明示する (例: "spec.md scope に DB 変更を含まないため C は対象外")。
+旧 "最低 3 件 Critical 必須" quota は **撤廃済** (`reviewer-base.md` §viewpoint 網羅性 を参照)。本 reviewer は Owner Matrix の A / B 範囲を主に担当し、`## 初回読了 viewpoint` の必須記入フォーマットに従い A-H すべてのカテゴリで `Critical:N High:N Medium:N Low:N` か `該当なし: <理由>` を明示する。`gate_common::viewpoint_coverage_check` が機械検証する。
 
 ## 出力フォーマット
 

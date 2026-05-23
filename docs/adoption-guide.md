@@ -222,9 +222,9 @@ gh skill install ukitomato/spec-driven-gating-workflow spec-gate --agent cursor 
 
 ### "pr-gate Round 4 で convergence failure"
 
-- 修正と新規発見が同 round で拮抗
-- `--defer-remaining` で残 Critical を follow-up Issue 化して進める判断
-- または ADR を新規起票して "現状を accept する" 経路
+- 修正と新規発見が同 round で拮抗 (隣接 2 round で resolved < new、v0.2.0 数学定義)
+- v0.2.0 で `--defer-remaining` は撤廃済 (pure hard gate)
+- 対応: ADR を新規起票して "現状を accept する" 経路 → Constitution Principle / spec 範囲調整 → 再 pr-gate (Round N+1)
 
 ### "/spec-gate コマンドが見つからない / failed to load"
 

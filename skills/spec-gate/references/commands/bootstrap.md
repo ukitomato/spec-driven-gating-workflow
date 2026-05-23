@@ -35,15 +35,23 @@
 3. AskUserQuestion で 4 候補 (default + 2 自動抽出 + 自由入力) を提示
 4. ユーザ確定値を `$PREFIX` として記録
 
-## Phase 2: Generic reviewer SubAgent 配置 (4 + base)
+## Phase 2: Generic reviewer + actor SubAgent 配置 (4 reviewer + base + 3 actor)
 
-`.claude/agents/` ディレクトリを `mkdir -p`。以下 5 ファイルを `${CLAUDE_SKILL_DIR}/references/subagents/` から `.claude/agents/` に Write:
+`.claude/agents/` ディレクトリを `mkdir -p`。以下 **8 ファイル** を `${CLAUDE_SKILL_DIR}/references/subagents/` から `.claude/agents/` に Write:
+
+**Reviewer (4 + base)**:
 
 - `reviewer-base.md` (共通 Adversary フレームワーク、他 reviewer が `Read` で参照する基盤)
 - `security-reviewer.md`
 - `architecture-reviewer.md`
 - `po-reviewer.md`
 - `convention-reviewer.md`
+
+**Actor (3 新規、resolves C-1-a)**:
+
+- `implementer.md` (code-gate auto-fix loop の中核 actor)
+- `lint-agent.md` (project lint 実行 dedicated subagent)
+- `test-agent.md` (project test 実行 dedicated subagent)
 
 既存があれば `--force` なしならば AskUserQuestion で上書き確認。
 
@@ -141,14 +149,24 @@ reviewers:
    - `${CLAUDE_SKILL_DIR}/references/memory/AGENTS.md` → fence-marker (`<!-- BEGIN spec-gate -->` / `<!-- END spec-gate -->`) で `AGENTS.md` に追記。既存マーカーがあれば内部を replace
    - 同様に `CLAUDE.md` 処理
 3. **lang resources**: `${CLAUDE_SKILL_DIR}/references/lang/*.json` → `.specify/templates/spec-gate/lang/`
-4. **helper scripts**: `${CLAUDE_SKILL_DIR}/scripts/{spec-resolve,status-transition}.sh` → `.specify/scripts/`
-   - `chmod +x` を付与
+4. **helper scripts** (`chmod +x` 付与):
+   - `${CLAUDE_SKILL_DIR}/scripts/spec-resolve.sh` → `.specify/scripts/spec-resolve.sh`
+   - `${CLAUDE_SKILL_DIR}/scripts/status-transition.sh` → `.specify/scripts/status-transition.sh`
+   - `${CLAUDE_SKILL_DIR}/scripts/gate-common.sh` → `.specify/scripts/gate-common.sh` (NEW、Wave 0)
+5. **registry files** (resolves C-1-b / C-5-b):
+   - `${CLAUDE_SKILL_DIR}/references/agents-registry.template.yaml` → `.specify/.agents-registry.yaml`
+   - `${CLAUDE_SKILL_DIR}/references/id-registry.template.json` → `.specify/.id-registry.json` (まだ無ければ)
+6. **gate-common smoke test** (Phase 5 末尾):
+   - `bash .specify/scripts/gate-common.sh version` が 1 を返すこと
+   - `bash .specify/scripts/gate-common.sh registry-load` が agent name を 1 件以上返すこと
 
-## Phase 6: Constitution scaffold 起草
+## Phase 6: Constitution scaffold 起草 (fence-marker aware、resolves E-3)
 
-1. `${CLAUDE_SKILL_DIR}/references/docs-templates/constitution-template.md` を Read
+本 Phase は `BOOTSTRAP_SECTION` fence marker **の内側のみ** に書き込む。migrate Phase 4 (constitution-drafter) が後で `MIGRATE_SECTION` 側に書き込むため、両者は並存可能。
+
+1. `${CLAUDE_SKILL_DIR}/references/docs-templates/constitution-template.md` を Read (fence markers 付き template)
 2. `docs/discovery.md` を Read し、tech stack section を解析
-3. tech stack に応じた Principle 候補を template に注入 (LLM が文章生成):
+3. tech stack に応じた Principle 候補を template の **`BOOTSTRAP_SECTION_START principle=I`** ... **`BOOTSTRAP_SECTION_END principle=I`** の内側に注入 (LLM が文章生成):
 
    | Stack 検出 | 起草する Principle (例) |
    |---|---|
@@ -173,7 +191,7 @@ reviewers:
    ---
    ```
 
-5. 既存 `.specify/memory/constitution.md` (`status: active`) がある場合は draft を別 file にして既存を保護 (上書きしない)
+5. 既存 `.specify/memory/constitution.md` (`status: active`) がある場合は draft を別 file にして既存を保護 (上書きしない)。**既存 draft が存在する場合は `.bak.<TS>` でバックアップを取った上で BOOTSTRAP_SECTION のみを置換** (MIGRATE_SECTION 内容は保全、R-11 対策)
 
 ## Phase 7: 残置 marker 検証
 
@@ -229,9 +247,13 @@ grep -rE '\{\{[a-z_]+\}\}' .claude/skills/${PREFIX}-* 2>/dev/null
 
 1. `.claude/skills/<prefix>-{spec,plan,tasks,design-gate,implement,code-gate,pr-gate,done,add-reviewer}/SKILL.md` が 9 個すべて存在
 2. `.claude/agents/{reviewer-base, security-reviewer, architecture-reviewer, po-reviewer, convention-reviewer}.md` が 5 個存在
-3. Phase 3 で採用した optional reviewer が `.claude/agents/` に追加配置されている
-4. `.specify/memory/constitution.draft.md` が `status: draft` で存在 (既存 active がなければ)
-5. `AGENTS.md` / `CLAUDE.md` に `<!-- BEGIN spec-gate -->` fence が 1 個ずつ存在
-6. `.specify/spec-gate/reviewers.yml` registry が存在し、採用 reviewer の entry が記載
-7. `.specify/scripts/{spec-resolve,status-transition}.sh` が実行可能 (`-x`)
-8. 全 wrapper SKILL.md 内に `{{prefix}}` placeholder が残っていない
+3. `.claude/agents/{implementer, lint-agent, test-agent}.md` が 3 個存在 (Wave 0 新規 actor、resolves C-1-a)
+4. Phase 3 で採用した optional reviewer が `.claude/agents/` に追加配置されている
+5. `.specify/memory/constitution.draft.md` が `status: draft` で存在 + BOOTSTRAP_SECTION / MIGRATE_SECTION fence markers が両方含まれる (既存 active がなければ)
+6. `AGENTS.md` / `CLAUDE.md` に `<!-- BEGIN spec-gate -->` fence が 1 個ずつ存在
+7. `.specify/spec-gate/reviewers.yml` registry が存在し、採用 reviewer の entry が記載
+8. `.specify/.agents-registry.yaml` が存在し、18 agent (5 reviewer + 5 brownfield specialist + 3 actor + 5 optional) を列挙
+9. `.specify/.id-registry.json` が存在 (bf_next: 1, sf_*_next: 1)
+10. `.specify/scripts/{spec-resolve,status-transition,gate-common}.sh` が実行可能 (`-x`)
+11. 全 wrapper SKILL.md 内に `{{prefix}}` placeholder が残っていない
+12. `bash .specify/scripts/gate-common.sh version` が 1 を返す (smoke test)

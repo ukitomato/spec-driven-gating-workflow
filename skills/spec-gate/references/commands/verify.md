@@ -26,17 +26,21 @@
 「必要な file / dir が揃っているか」の純粋なチェック。
 
 ```bash
-# 必須 file / dir リスト (チェック対象)
+# 必須 file / dir リスト (チェック対象、Wave 4 で expanded)
 REQUIRED:
   .specify/memory/constitution.md (or constitution.draft.md)
   .specify/templates/spec-gate/  (bootstrap が配置済)
   .specify/scripts/spec-resolve.sh  (実行可能)
   .specify/scripts/status-transition.sh  (実行可能)
+  .specify/scripts/gate-common.sh  (実行可能、Wave 0 新規)
+  .specify/.agents-registry.yaml  (Wave 0 新規)
+  .specify/.id-registry.json  (Wave 0 新規)
   docs/discovery.md
   docs/domains/  (1+ subdirectory)
   docs/glossary.md
   .claude/skills/<prefix>-{spec,plan,tasks,design-gate,implement,code-gate,pr-gate,done,add-reviewer}/SKILL.md  (9個)
-  .claude/agents/{reviewer-base,security-reviewer,architecture-reviewer,po-reviewer,convention-reviewer}.md  (5個)
+  .claude/agents/{reviewer-base,security-reviewer,architecture-reviewer,po-reviewer,convention-reviewer}.md  (5個 generic)
+  .claude/agents/{implementer,lint-agent,test-agent}.md  (3個 actor、Wave 0 新規)
 ```
 
 各項目について:
@@ -82,6 +86,19 @@ grep -rn 'BF-001' <referenced files>
 - registry にあるが agent file なし → `fail` (broken registry)
 - agent file はあるが registry に未登録 → `warning` (手動配置の可能性)
 
+### 2.5 `.specify/.agents-registry.yaml` ↔ `.claude/agents/` の一致 (Wave 4 新規)
+
+```bash
+source .specify/scripts/gate-common.sh
+gate_common::registry_load   # 18 agent name を返す
+# 各 agent について registry_assert_agent を実行
+```
+
+- registered だが `.claude/agents/<name>.md` 不在 → `fail`
+- `.claude/agents/<name>.md` あるが registry 未登録 → **explicit note 必須** (resolves B-3 medium):
+  - "Unregistered agents (N): <list>" を verify-report に記載
+  - "意図的に未登録 (brownfield specialist 等)" の場合は `reviewers.yml` 側に `intentionally_unregistered: <reason>` の comment を要求
+
 ## Phase 3: 過不足検証 (Gap Analysis)
 
 「あるべきもの」と「現状」の差分を semantic に判定 (LLM 判断含む)。
@@ -102,11 +119,62 @@ grep -rn 'BF-001' <referenced files>
 各 charter の Mission / Scope を Read し、Constitution Principle で関連する Principle が存在するかを LLM が判定:
 - e.g., charter で "user authentication" が中心 mission なのに、Constitution に auth 関連 Principle なし → `warning` + Constitution amendment を提案
 
-### 3.3 Glossary 用語の使用状況
+### 3.3 Glossary 用語の使用状況 (全用語スキャン、resolves B-3 medium)
 
-`docs/glossary.md` の各用語に対し:
-- 0 件のコード参照 (`grep -rc "<term>" lib/ src/`) → `warning` (未使用、削除候補)
-- glossary 未登録だがコード頻出 (`grep -rc` で多数ヒット、generic words を除外) → `warning` (glossary 追加候補)
+`docs/glossary.md` の **全 Canonical Terms + Candidate Terms** (旧仕様の 8/30 サンプリングではなく全用語) に対し:
+
+```bash
+for term in $(awk '/^### / {print $2}' docs/glossary.md); do
+  count=$(grep -rc "$term" lib/ src/ apps/ packages/ 2>/dev/null | awk -F: '{s+=$2} END {print s}')
+  echo "$term: $count"
+done
+```
+
+各用語について:
+- 0 件のコード参照 → `warning` (未使用、削除候補)
+- Candidate Terms section にあって 5+ コード参照 → `warning` (canonical 昇格候補)
+
+verify-report の "Glossary Usage Gaps" section に **全用語の参照件数 table** を必ず含める ("8/30 sampled" の旧 metric は廃止)。
+
+### 3.4 Reverse spec `confidence` 分布 (Wave 4 新規)
+
+`specs/rev-*/spec.md` frontmatter の `confidence` 値分布を集計:
+
+- `high`: 件数
+- `medium`: 件数
+- `low`: 件数
+
+`low` 比率が 50% を超える場合は `warning` (constitution-drafter の入力品質に懸念)。
+
+### 3.5 NON-NEGOTIABLE Principle 採用時の Critical 違反件数 enumeration (NEW、resolves B-3 blocker / B-5)
+
+`.specify/memory/constitution.{md,draft.md}` の全 NON-NEGOTIABLE Principle に対し:
+
+```bash
+for principle in <each NON-NEGOTIABLE>; do
+  pattern=$(get_bad_pattern_grep_metadata "$principle")
+  count=$(bash -c "$pattern" | wc -l)
+  paths=$(bash -c "$pattern" | head -10)
+  emit_to_report principle:$principle, existing_violations:$count, paths:$paths
+done
+```
+
+**Hard gate**: いずれかの NON-NEGOTIABLE Principle で `existing_violations > 0` なら `overall_status: fail` (warning では不十分、resolves B-3 blocker)。
+
+判定 table を verify-report に必須記録:
+
+```markdown
+## Phase 3.5: NON-NEGOTIABLE Principle 採用時の Critical 違反件数
+
+| Principle | existing_violations | violation_threshold | verdict | paths (top 5) |
+|---|---|---|---|---|
+| I | 4 | 0 | **fail** | apps/functions/src/stripe/connect.js:181, ...:241, ... |
+| II | 0 | 0 | pass | (none) |
+| XI | 7 | 0 | **fail** | apps/mobile/lib/data/services/review_completion_service_impl.dart:17, ... |
+| **Total fail** | **2 Principle** | — | — | — |
+```
+
+採用 metadata 不在の NON-NEGOTIABLE Principle (旧仕様で書かれた Principle) は `warning` + "adoption_metadata 追加を推奨" 案内。
 
 ## Phase 4: 開発 Ready チェック (Dry-Run)
 
@@ -149,6 +217,8 @@ exit code 非ゼロ → `warning` (既存コードの lint 違反、新規開発
 ```bash
 [ -x .specify/scripts/spec-resolve.sh ] && echo "spec-resolve.sh OK" || echo "FAIL: not executable"
 [ -x .specify/scripts/status-transition.sh ] && echo "status-transition.sh OK" || echo "FAIL: not executable"
+[ -x .specify/scripts/gate-common.sh ] && echo "gate-common.sh OK" || echo "FAIL: not executable"
+bash .specify/scripts/gate-common.sh version >/dev/null && echo "gate-common version OK" || echo "FAIL: smoke test"
 ```
 
 非実行可能 → `fail` (`chmod +x` で修正可能なので修正案内も出す)。
@@ -158,6 +228,43 @@ exit code 非ゼロ → `warning` (既存コードの lint 違反、新規開発
 - `.env.example` の存在
 - 環境変数 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 等の hardcode 検出 (`grep -rE 'sk-[a-zA-Z0-9]{32,}'`)
 - 検出されれば `fail` (secret leak)
+
+### 4.5b: Orchestration runtime check (Wave 4、resolves B-3 high)
+
+monorepo orchestration tool (`go-task/task`, `nx`, `turbo`, `lerna`) が `Taskfile.yml` / `nx.json` / `turbo.json` / `lerna.json` から検出された場合、その実体 binary が `which` で存在するか確認:
+
+- `Taskfile.yml` あり、`task` 未インストール → **`fail` (dev-ready: fail)** (resolves B-3 high の warning 止まり問題)
+- `nx.json` あり、`nx` 未インストール → fail
+- `turbo.json` あり、`turbo` 未インストール → fail
+
+monorepo の主要 entry が機能不全 → dev-ready を保証できないため fail。
+
+### 4.6: Static file 404 check (Wave 4 新規、resolves B-8 blocker)
+
+外部 service redirect URL / OAuth callback / Stripe Connect onboarding return URL 等の **静的ファイルの物理存在** を確認:
+
+```bash
+# 例: Stripe Connect onboarding return URL の指す path
+# `apps/functions/src/stripe/connect.js` を Grep し
+#   returnUrl: 'https://menteech.com/stripe/onboarding-complete'
+# のような URL を抽出し、対応する static file の存在を確認
+
+for url in $(extract_return_urls); do
+  path=$(url_to_local_path "$url")  # e.g., sites/homepage/stripe/onboarding-complete.html
+  if [ ! -f "$path" ]; then
+    echo "fail: $url → $path (file missing)"
+  fi
+done
+```
+
+検出パターン:
+- Stripe Connect: `returnUrl` / `refreshUrl` flags
+- OAuth callback: `redirect_uri` / `callback_url`
+- 設定 file 内の HTTPS path
+
+不在 → **`fail`** (UX が成立しない、resolves B-8 Stripe 404 問題)。
+
+verify-report の "Phase 4.6: Static URL existence check" に table 出力。
 
 ## Phase 5: レポート出力
 
@@ -221,11 +328,18 @@ overall_status: <ready | warning | fail>
 ...
 ```
 
-## Overall status の決定
+## Overall status の決定 (Wave 4 で hardening)
 
 - **ready**: 全 phase が `pass` (warning も無し)
-- **warning**: 1+ warning、ただし fail なし。`--strict` モードではこれも fail 扱い
-- **fail**: Phase 1 / 2 で `fail` 検出 (Phase 3 / 4 の fail は warning に降格)
+- **warning**: 1+ warning、ただし fail なし。`--strict` モードでは **warning も fail に escalate される** (resolves item 22)
+- **fail**: 以下のいずれかで決定:
+  - Phase 1 / 2 で `fail` 検出
+  - **Phase 3.5 で NON-NEGOTIABLE Principle existing_violations > 0** (resolves B-3 blocker、warning に降格しない)
+  - Phase 4.5b で orchestration runtime missing (resolves B-3 high)
+  - Phase 4.6 で static URL 404 (resolves B-8 blocker)
+  - Phase 4.5 で secret leak
+
+`--strict` モード: warning も fail として overall_status を fail に escalate (resolves item 22 / Wave 4)。
 
 ## Idempotency
 
@@ -246,3 +360,8 @@ overall_status: <ready | warning | fail>
 3. Recommended actions section に具体的な修正コマンド or 案内が記載
 4. `--strict` モードで warning も fail にエスカレートされる
 5. `--phase 3` のような部分実行が動作する
+6. Phase 2.5 で agent registry validation が走り unregistered list を出す
+7. Phase 3.3 で全 glossary 用語の grep が実行され (8/30 サンプリングなし)、結果 table が含まれる
+8. Phase 3.5 で NON-NEGOTIABLE Principle の existing_violations が enumerate され、`> 0` あれば overall_status: fail
+9. Phase 4.5b で orchestration runtime (`task` 等) 不在を fail として記録
+10. Phase 4.6 で external service return URL の静的 file 存在チェックを実行

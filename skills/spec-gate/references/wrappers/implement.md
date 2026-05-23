@@ -25,13 +25,23 @@ tasks.md に従って実装を実行する。`/speckit.implement` を内部委�
 
 ## Steps
 
-### Phase 0: Preconditions
+### Phase 0: Preconditions (gate-common.sh 委譲)
+
+```bash
+source .specify/scripts/gate-common.sh
+gate_common::phase0_check_repo || exit 1
+spec_dir=$(gate_common::phase0_resolve_spec_dir "${1:-}") || exit 2
+gate_common::phase0_check_status "$spec_dir" "implementing" || exit 1
+gate_common::phase0_check_charter "$spec_dir" || exit 1
+# design-gate verdict が PASS であること
+gate_common::verdict_validate "$spec_dir/.gate-verdict-design.json" || halt "/{{prefix}}-design-gate PASS が必要"
+```
 
 1. spec_dir 解決
 2. `<spec_dir>/spec.md` の frontmatter:
    - `status: implementing` であること (異なれば halt with "/{{prefix}}-design-gate で gate 通過してから")
    - `targets` 値を取得 (frontend / backend / both)
-3. `<spec_dir>/design-gate.md` が PASS であることを確認 (Verdict 行を Grep)
+3. `<spec_dir>/.gate-verdict-design.json` の verdict=PASS + critical=0 を `verdict_validate` で確認
 4. `<spec_dir>/tasks.md` の checkbox がすべて `[ ]` (未着手) であることを確認 (再開なら `[x]` 混在 OK)
 
 ### Phase 1: Implementation order の決定
@@ -76,9 +86,23 @@ total=$(grep -cE '^\s*- \[[ x]\]' "$spec_dir/tasks.md")
 
 ### Phase 5: `/{{prefix}}-code-gate` auto-chain
 
-実装完了後、本 wrapper が自動的に `/{{prefix}}-code-gate <spec_dir>` を起動する (auto-chain は default ON、`--no-auto-gate` で skip 可能)。
+実装完了後、本 wrapper が自動的に `/{{prefix}}-code-gate <spec_dir>` を起動する (auto-chain は default ON、**`--no-auto-chain` で skip 可能** — flag 名統一、resolves item 7)。
 
 auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務は implement までで完了。
+
+### code-gate との結合点 (resolves item 7)
+
+- **受け渡し artifact**:
+  - `<spec_dir>/touched-files.txt` (sort -u 済) — code-gate Phase 1 で diff_files ∩ touched_files として使用
+  - spec.md frontmatter status=implementing — code-gate が validates
+  - tasks.md 全 `[x]` — code-gate が validates
+- **受け渡し guarantee**:
+  - `touched-files.txt` は **必ず非空** (本 Phase 4 で検証)
+  - implementer が code-gate の auto-fix で追加修正したファイルは code-gate 内 implementer subagent が `touched-files.txt` に再追加 (重複は排除)
+- **結合の責務境界**:
+  - implement: 「機能を成立させる」までを保証
+  - code-gate: 「静的検査 + テストが通る」までを保証
+  - pr-gate: 「adversarial Critical が無い」までを保証
 
 ### Phase 6: 完了通知 (auto-chain skip 時のみ)
 
@@ -109,3 +133,4 @@ auto-chain 中の status 遷移は code-gate 側が担当。本 skill の責務�
 3. spec.md frontmatter `status` が `implementing` (code-gate auto-chain 前) のまま
 4. ビルド / lint / test に明らかな breaking がない (code-gate でより詳細にチェックされる)
 5. auto-chain ON ならば `/{{prefix}}-code-gate` が起動された
+6. `--no-auto-chain` 指定時は code-gate を起動せず status: implementing で完了する (旧 `--no-auto-gate` は deprecation warning 付き acceptance、次 release で削除)

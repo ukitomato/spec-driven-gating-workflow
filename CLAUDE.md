@@ -13,7 +13,8 @@
 
 - 本 skill は `/spec-gate <subcommand>` という subcommand dispatcher として動作し、4 機能 (`scan` / `bootstrap` / `migrate` / `verify`) を提供する。
 - 9 個の daily workflow wrapper (`/<prefix>-spec` 等) は `gh skill` 配布対象外で、`/spec-gate bootstrap` が project-local に生成する。
-- 10 個の reviewer SubAgent (`reviewer-base` + 4 generic + 5 Brownfield specialist) と 5 個の optional reviewer も bootstrap / migrate が project-local の `.claude/agents/` に書き出す。
+- 13 個の SubAgent (5 reviewer + 5 Brownfield specialist + **3 actor** (`implementer` / `lint-agent` / `test-agent`、v0.2.0)) と 5 個の optional reviewer を bootstrap / migrate が project-local の `.claude/agents/` に書き出す。
+- v0.2.0 で `.specify/.agents-registry.yaml` (18 agent registry) と `.specify/.id-registry.json` (bf_ids/sf_ids global namespace) と `.specify/scripts/gate-common.sh` (共通 helper、JSON verdict / cascade enforcement / atomic spec-id / UTF-8 truncate 等) が追加された。
 
 ## Key constraints
 

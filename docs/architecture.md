@@ -46,11 +46,12 @@ META subcommand は固定名 `spec-gate` をそのまま使う。Daily wrapper �
 - migrate が 5 個 (brownfield specialist) を追加配置
 - 採用された optional reviewer (bootstrap Phase 3 の構成提案結果) が追加配置
 
-SubAgent は **read-only** (`tools: Read, Grep, Glob`)、`convention-reviewer` のみ `Bash` 許可 (lint コマンド実行)、brownfield specialist は `Bash` 許可 (git log scan)。clean-context isolation を守る:
+SubAgent は **read-only** (`tools: Read, Grep, Glob`)、`convention-reviewer` のみ `Bash` 許可 (lint コマンド実行)、brownfield specialist は `Bash` 許可 (git log scan)、actor (`implementer` / `lint-agent` / `test-agent`) は `Read/Write/Edit/Bash` 等を持つ (実体ある実装、v0.2.0)。clean-context isolation を守る:
 
 - 呼び出し元 skill / wrapper の会話履歴を渡さない
 - 「事情を知らない初見レビュワー」として機能、盲点を出す
-- 最低 3 件の Critical 強制 (同調バイアス打消し)
+- **viewpoint A-H 8 カテゴリ網羅性チェック** (v0.2.0 — 旧 "最低 3 件の Critical 強制" quota は撤廃、observation-based 主義と整合)
+- `gate_common::cascade_enforce` により 0 件確認なしの Critical は機械的に High 降格 (捏造誘因の解消)
 
 ### 原則 5: Status lifecycle による hard gating
 

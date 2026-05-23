@@ -189,13 +189,23 @@ Bootstrap writes nine wrappers under `.claude/skills/<prefix>-*/`, where `<prefi
 | `/<prefix>-done`           | Producer                            | `reviewing → completed`                            |
 | `/<prefix>-add-reviewer`   | Customization                       | no transition                                      |
 
-### Reviewer SubAgents (deployed by bootstrap / migrate)
+### SubAgents (deployed by bootstrap / migrate)
 
 - **Five generic reviewers** (installed by bootstrap): `reviewer-base` (the shared adversary framework), `security-reviewer`, `architecture-reviewer`, `po-reviewer`, and `convention-reviewer`.
+- **Three actors** (installed by bootstrap, v0.2.0): `implementer` (code-gate auto-fix loop core), `lint-agent` (JSON-structured lint runner), `test-agent` (JSON-structured test runner). Actors do **not** read `reviewer-base`; they are not reviewers.
 - **Five Brownfield specialists** (installed by `scan` and `migrate`): `discovery-scanner`, `charter-drafter`, `spec-reverser`, `constitution-drafter`, `glossary-extractor`.
 - **Five optional reviewers** (proposed during bootstrap based on the detected tech stack, or added later via `/<prefix>-add-reviewer --from-template`): `database-reviewer`, `a11y-reviewer`, `api-performance-reviewer`, `openapi-contract-reviewer`, `ux-reviewer`.
 
-All reviewer SubAgents run in clean context (no inheritance of the calling skill's conversation history) and are required to emit at least three Critical findings as a counter-measure against sycophancy bias. For the full permission boundaries and the four-layer component map, see [docs/architecture.md](docs/architecture.md).
+All 18 agents are listed in `.specify/.agents-registry.yaml` (v0.2.0). Skills validate agent presence via `gate_common::registry_assert_agent` before invocation.
+
+All reviewer SubAgents run in clean context (no inheritance of the calling skill's conversation history). v0.2.0 replaced the "minimum 3 Critical" quota with an A-H 8-viewpoint coverage matrix (`gate_common::viewpoint_coverage_check`), and 0-cascade-evidence Critical findings are mechanically demoted to High (`gate_common::cascade_enforce`). For the full permission boundaries and the four-layer component map, see [docs/architecture.md](docs/architecture.md).
+
+### Shared helpers (v0.2.0)
+
+- `.specify/scripts/gate-common.sh` — atomic spec-id, cascade enforcement, viewpoint coverage, JSON verdict emit/validate, registry validation, UTF-8 grapheme-aware truncation, run-with-timeout
+- `.specify/scripts/status-transition.sh --gate-transition` — verdict-validated status lifecycle transitions
+- `.specify/.agents-registry.yaml` — 18-agent registry, validated before subagent invoke
+- `.specify/.id-registry.json` — global namespace for brownfield `bf_ids` / `sf_ids`
 
 ## Workflow walkthrough
 
@@ -224,7 +234,7 @@ Reviewer SubAgents fire in parallel at each gate, in clean context:
 
 - **Design gate** runs `speckit.analyze` for machine consistency together with `po-reviewer` (User Story value) and `architecture-reviewer` (Constitution alignment). The status transitions only when zero Critical findings remain.
 - **Code gate** runs lint, tests, `convention-reviewer`, and any tech-stack-specific reviewers. It auto-fixes up to three iterations; if the fix cascade does not converge, the gate halts and surfaces the underlying design problem.
-- **PR gate** runs five feature-scope reviewers and three system-scope reviewers, in multiple rounds with a convergence check at Round 4. Use `--defer-remaining` to bundle outstanding Critical issues into a follow-up Issue and unlock `done`.
+- **PR gate** runs feature-scope reviewers (security / architecture / po, code-gate との overlap 排除済) and system-scope reviewers in multiple rounds with a convergence check at Round 4 (adjacent 2-round resolved<new rule, v0.2.0). **Pure hard gate**: `--defer-remaining` is removed; Critical=0 is required to unlock `done`. To accept current state, raise a new ADR and adjust the spec scope / Constitution Principle, then re-run pr-gate.
 
 For the gate internals, see [docs/architecture.md](docs/architecture.md). For an end-to-end execution walkthrough, see [tutorials/greenfield-walkthrough.md](tutorials/greenfield-walkthrough.md).
 
@@ -297,7 +307,7 @@ Hosts that share `.agents/skills/` need only one install. Using Claude Code toge
 **A:** The auto-fix loop introduced a new violation with every fix. This signals a design-level problem. Step back to `/<prefix>-design-gate`, revise spec or plan, and retry.
 
 **Q: pr-gate Round 4 failed with "convergence failure".**
-**A:** Fixes and new findings are balanced. Use `--defer-remaining` to bundle outstanding Critical issues into a follow-up GitHub Issue, or raise an ADR that explicitly accepts the current state.
+**A:** Adjacent 2 rounds both had `resolved < new` (v0.2.0 mathematical definition). v0.2.0 removed `--defer-remaining` (pure hard gate). Raise a new ADR that explicitly accepts the current state, adjust the Constitution Principle / spec scope to dissolve the Critical, then re-run pr-gate (Round N+1).
 
 **Q: Can I use this kit on its own repository (dogfooding)?**
 **A:** No. This repository deliberately does not run the workflow on itself — there is a chicken-and-egg with `bootstrap`. Use `gh skill install --from-local ./skills/spec-gate` for local testing in a separate project.

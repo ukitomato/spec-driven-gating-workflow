@@ -6,8 +6,9 @@ description: |
     /spec-gate scan       — detect tech stack, write docs/discovery.md
     /spec-gate bootstrap  — install 9 daily workflow wrappers + reviewer subagents (with reviewer proposal)
                             + Constitution scaffold + AGENTS.md/CLAUDE.md merge
-    /spec-gate migrate    — Brownfield 5-phase orchestrator (Charter Reverse, Spec Reverse,
-                            Constitution Draft, Glossary Extraction)
+    /spec-gate migrate    — Brownfield 7-phase orchestrator (Discovery, Charter Reverse,
+                            Spec Reverse, Constitution Draft, Glossary Extraction,
+                            Finalize, Final Summary)
     /spec-gate verify     — quality gate (structure, consistency, gap, dev-ready) → docs/verify-report.md
   Use after `specify init`. Trigger phrases: "set up spec-gate", "bootstrap gating workflow",
   "scan project tech stack", "migrate brownfield to spec-driven", "verify spec-gate setup".
@@ -57,7 +58,7 @@ metadata:
    Subcommands:
      scan       Detect tech stack and write docs/discovery.md
      bootstrap  Install daily workflow wrappers + reviewer subagents + Constitution scaffold
-     migrate    Brownfield 5-phase orchestrator (requires bootstrap to be run first)
+     migrate    Brownfield 7-phase orchestrator (requires bootstrap to be run first)
      verify     Quality gate (structure, consistency, gap, dev-ready)
 
    Examples:
@@ -87,7 +88,7 @@ Phase 0 で Read した subcommand body の指示にそのまま従って実行�
 
 - `references/commands/scan.md` — scan subcommand body
 - `references/commands/bootstrap.md` — bootstrap subcommand body (with reviewer proposal phase)
-- `references/commands/migrate.md` — migrate subcommand body (Brownfield 5-phase)
+- `references/commands/migrate.md` — migrate subcommand body (Brownfield 7-phase incl. Finalize)
 - `references/commands/verify.md` — verify subcommand body (quality gate)
 - `references/subagents/<name>.md` — 10 SubAgents (deployed to `.claude/agents/` by command bodies)
 - `references/wrappers/<name>.md` — 9 daily workflow wrapper templates (deployed by bootstrap)

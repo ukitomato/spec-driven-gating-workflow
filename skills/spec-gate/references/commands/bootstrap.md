@@ -55,6 +55,43 @@
 
 既存があれば `--force` なしならば AskUserQuestion で上書き確認。
 
+### Phase 2 完了通知 (subagent runtime registration、2026-05-23 追加、resolves J-1)
+
+**重要**: `.claude/agents/` 配下に Write した subagent は、**現在の Claude Code セッションでは即座に `subagent_type` として認識されない**。次回 Claude Code 起動時に load される設計のため、本 Phase 完了後に必ず以下をユーザへ案内:
+
+```text
+✓ Phase 2 完了: 8 subagent を .claude/agents/ に配置しました
+  - reviewer-base, security/architecture/po/convention-reviewer
+  - implementer, lint-agent, test-agent
+
+⚠️ subagent runtime registration:
+  これらの subagent は次回 Claude Code 起動時から `Agent` ツールで利用可能になります。
+  
+  - 即時利用したい場合: `/exit` で抜けて再起動してください
+  - 後続 Phase が subagent を起動する場合: 本 dispatcher が `general-purpose` agent に
+    full instruction を embedded で渡す回避経路を取ります (clean-context isolation 維持)
+```
+
+### Phase 2b: Locale persistence (Wave 5 追加、2026-05-23)
+
+- `--lang` flag の値 (default `ja`) を `.specify/locale` ファイルに 1 行で persist (例: `ja\n`)
+- 以後 `/spec-gate migrate` / `/spec-gate verify` がこの file を Read して locale を継承
+- user が変更したい場合: `echo en > .specify/locale` で上書き
+
+これにより Menteech pilot で観察された "locale 未指定 → 後から全 charter を遡及翻訳" friction を防止。
+
+### Phase 2 で配置する brownfield specialist (migrate Phase 3 で利用)
+
+migrate 実行を予定する場合、本 Phase で追加配置:
+
+- `discovery-scanner.md` (migrate Phase 1)
+- `charter-drafter.md` (migrate Phase 2)
+- `spec-reverser.md` (migrate Phase 3、**SpecKit 標準 7-file 構成**、2026-05-23 改訂)
+- `constitution-drafter.md` (migrate Phase 4)
+- `glossary-extractor.md` (migrate Phase 5)
+
+これら 5 specialist は migrate 専任のため、greenfield プロジェクトでは Write 不要 (`--no-migrate` flag で skip 可能)。
+
 ## Phase 3: Reviewer 構成提案 (AskUserQuestion、★ MVP 新規 phase)
 
 `docs/discovery.md` を Read し、tech stack section から構成提案を生成する。

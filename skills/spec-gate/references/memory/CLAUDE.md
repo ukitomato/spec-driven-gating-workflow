@@ -22,9 +22,8 @@
 
 - **gate 失敗時は status を進めない**。Critical 指摘を解消してから再実行する
 - **AskUserQuestion gated 確定**: domain decomposition / reverse spec の domain 帰属 / Constitution Principle 採否は必ず人間承認
-- **`rev-` prefix で物理分離**: brownfield 由来の spec は `specs/rev-<NNN>-<DOM>-<slug>/` に集約し、新規 spec と区別
-- **`status: migrated, needs-human-review`**: reverse 由来は frontmatter で明示
-- **bf_ids / sf_ids トレーサビリティ**: code ↔ spec を相互参照
+- **Brownfield migrate の作業中** (`/spec-gate migrate` Phase 3-5 実行中): reverse spec は `specs/rev-<NNN>-<DOM>-<slug>/` に **暫定的に** 配置し、新規 spec と区別する。**Phase 6 Finalize 完了後は `rev-` prefix を削除** して `specs/<NNN>-<DOM>-<slug>/` に統一 (`.migration-trace.md` companion で migration 履歴を識別)
+- **bf_ids / sf_ids トレーサビリティ**: brownfield migrate 中は frontmatter に保持、Phase 6 Finalize 後は `.migration-trace.md` 経由でコード ↔ spec 相互参照
 
 ### Reviewer SubAgent (clean context isolation)
 

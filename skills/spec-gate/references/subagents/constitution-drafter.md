@@ -47,7 +47,7 @@ invoke 直後に Read:
 1. `reviewer-base.md`
 2. `docs/discovery.md` (Phase 1) — finding category (requirement_gap / risk) を Principle 候補ソースに
 3. `docs/domains/*/charter.md` (Phase 2 で確定済の全 charter)
-4. `specs/rev-*/{spec,plan,tasks}.md` で **`confidence: high` のもののみ** (Phase 3、入力 filter)
+4. `specs/rev-*/` 配下の 7-file セット — ただし **`research.md` frontmatter `confidence: high` の feature のみ** を入力に採用 (Phase 3、`confidence` は research.md に集約された都合上、ここを filter key にする)
 5. `docs-templates/constitution-template.md` (template structure + fence markers)
 6. 既存 `.specify/memory/constitution.md` (もし存在すれば既存 Principle を保護、BOOTSTRAP_SECTION 内容は触らない)
 

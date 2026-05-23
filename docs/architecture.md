@@ -101,7 +101,7 @@ skills/spec-gate/
 |---|---|---|
 | `/spec-gate scan` | tech stack 検出 → `docs/discovery.md` | (none) |
 | `/spec-gate bootstrap` | 9 daily wrapper + 4 generic reviewer + 提案 optional reviewer + Constitution scaffold | (none) |
-| `/spec-gate migrate` | Brownfield 5-phase: Charter Reverse / Spec Reverse / Constitution / Glossary | (none) |
+| `/spec-gate migrate` | Brownfield 7-phase: Discovery / Charter Reverse / Spec Reverse (7-file) / Constitution / Glossary / Finalize / Final Summary | (none) |
 | `/spec-gate verify` | 品質ゲート: 構造 / 整合 / 過不足 / dev-ready → `docs/verify-report.md` | (none) |
 
 ### Layer 3: Daily wrappers (9、bootstrap が生成)

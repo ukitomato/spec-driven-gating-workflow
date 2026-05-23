@@ -15,7 +15,7 @@ invoke 直後に Read:
 1. `reviewer-base.md`
 2. `docs/discovery.md` (Phase 1)
 3. `docs/domains/*/charter.md` (Phase 2 全 charter)
-4. `specs/rev-*/{spec,plan,tasks}.md` (Phase 3 reverse spec — **confidence: high のみ** を canonical 候補のソースに使う、low/medium は candidate side で参考)
+4. `specs/rev-*/` 配下の 7-file セット (Phase 3 reverse spec) — **`research.md` frontmatter `confidence: high` のもののみ** を canonical 候補のソースに使う、low/medium は candidate side で参考 (`confidence` は research.md に集約された都合上、ここを filter key にする)
 5. `docs-templates/glossary-template.md` (template 構造)
 6. 既存 `docs/glossary.md` (存在すれば追加候補のみ提案、上書き禁止)
 

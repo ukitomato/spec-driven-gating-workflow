@@ -137,13 +137,15 @@ ready になるまで指摘事項を修正。
 /spec-gate migrate
 ```
 
-5-phase orchestrator が起動:
+7-phase orchestrator が起動:
 
 1. **Phase 1 Surface Scan** (5 分): discovery-scanner、既存 `docs/discovery.md` あれば skip
 2. **Phase 2 Domain Charter Reverse** (30-60 分): charter-drafter、各 domain ごとに AskUserQuestion 承認 → `docs/domains/<name>/charter.md`
-3. **Phase 3 Spec Reverse** (60-90 分): spec-reverser、各 feature ごとに承認 → `specs/rev-<NNN>-<DOM>-<slug>/{spec,plan,tasks}.md` (status: migrated, bf_ids/sf_ids)
+3. **Phase 3 Spec Reverse** (60-90 分): spec-reverser、enumerate + batch で全 feature を SpecKit 標準 7-file 構成 (spec / plan / research / data-model / quickstart / contracts/ / tasks) で draft → `specs/rev-<NNN>-<DOM>-<slug>/` (status: migrated、forward-looking、brownfield 証跡は research.md に集約)
 4. **Phase 4 Constitution Draft** (20-30 分): constitution-drafter、既存 draft があれば merge
 5. **Phase 5 Glossary Extraction** (15-20 分): glossary-extractor、既存 glossary と差分追記
+6. **Phase 6 Finalize** (20-40 分): 作業メタ (`[observed]` / `confidence:` / `bf_ids` / fence marker 等) を `.migration-trace.md` に隔離し、本体を product-centric に rewrite。`specs/rev-*/` → `specs/<NNN>-...` に dir rename
+7. **Phase 7 Final Summary** (1 分): 完了サマリ + 次アクション提示
 
 詳細は [tutorials/brownfield-migration.md](../tutorials/brownfield-migration.md)。
 

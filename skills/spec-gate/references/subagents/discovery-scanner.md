@@ -84,7 +84,7 @@ Dockerfile docker-compose.yaml docker-compose.yml
 
 `firebase.json`, `app.yaml`, `serverless.yml`, `wrangler.toml`, `flutter_flavorizr` 等の flavor artifact を検出時、各 flavor (dev / stg / prod) について以下のいずれかを必ず emit:
 
-- **検出**: `flavor: <name>` + **具体的な差分** (例: `stg differs from prod in databaseURL=projects/menteech-stg`)
+- **検出**: `flavor: <name>` + **具体的な差分** (例: `stg differs from prod in databaseURL=projects/<project>-stg`)
 - **不在**: `flavor: <name>` + `absent: true` + `reason: <一行>` (例: "No `.env.stg` and no override block in firebase.json")
 
 **禁止フレーズ**: "確認したが追加情報なし" は明示的に禁止。`absent: true` で代替する。
@@ -176,9 +176,9 @@ invoker に返す report は以下構造:
 (workspace ごとに別 section、または top-level scripts)
 
 ## Flavors (B-4)
-- flavor: dev — databaseURL=projects/menteech-dev
+- flavor: dev — databaseURL=projects/<project>-dev
 - flavor: stg — absent: true, reason: "No .env.stg and no override block in firebase.json"
-- flavor: prod — databaseURL=projects/menteech
+- flavor: prod — databaseURL=projects/<project>
 
 ## CI/CD
 - Provider: <GitHub Actions | GitLab CI | Jenkins | ...>

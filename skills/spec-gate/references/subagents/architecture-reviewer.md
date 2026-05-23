@@ -47,10 +47,21 @@ invoke 直後に以下を Read:
   - 同種パターンを Grep で全探索 (`grep -rn 'from ...data.repositories' presentation/`)
 - module export の最小化 (private な internal を export していないか)
 
-### E. Cross-domain invariant
+### E. Cross-domain invariant (CDI)
 - domain A の data が domain B の constraint に違反するシナリオ
 - 例: `identity` domain の user 削除が `posts` domain のレコードを孤立化させる cascade 不備
-- _overview.md の "Cross-domain invariants" section があれば全件照合
+- `docs/domains/_overview.md` の "Cross-Domain Invariants" section があれば全件照合
+- **Cross-spec CDI contract 整合性チェック (NON-NEGOTIABLE、2026-05-23 追加、resolves J-3)**:
+  - 1 つの CDI が複数 spec の `contracts/` で別形に定義されていないか確認
+  - 例: CDI-<NN> (ある domain で発火する event が他 domain で反転 / 補完処理を要求するパターン) が rev-<NNN-A> (event 発火側) の `contracts/<fn-a>.md` と rev-<NNN-B> (反転処理側) の `contracts/<fn-b>.md` の両方で参照される。両者の sibling 関数 signature (input/output schema、idempotency 規約) が一致することを `diff`/`grep` で機械検証
+  - 不一致発見時は **Critical** (CDI 違反 = Principle 違反相当)
+  - 全 spec の `related_cdis:` frontmatter を集計し、各 CDI が複数 spec に渡る場合は必ず contracts/ 横断 check 対象
+  - 検出スクリプト例:
+    ```bash
+    # 全 spec の contracts/ から CDI-<NN> 関連の sibling fn signature を抽出
+    grep -A 20 "CDI-<NN>\|<related-keywords>" specs/*/contracts/*.md
+    # spec 間で input/output 構造が一致するか目視 or diff で確認
+    ```
 
 ### F. Configuration / Environment drift
 - dev / staging / prod 間の config 一致 (`.env.example` と prod env の同期)

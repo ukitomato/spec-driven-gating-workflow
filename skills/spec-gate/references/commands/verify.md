@@ -54,14 +54,70 @@ verification report の Phase 1 section に結果を記録 (table 形式)。
 
 frontmatter / 参照関係の妥当性チェック。
 
-### 2.1 spec frontmatter validity
+### 2.1 spec metadata validity (Wave 5 改修 2026-05-23、resolves Menteech pilot で観察された "verify spec が YAML frontmatter を期待するが SpecKit standard は bold-field" 問題)
 
-`specs/*/spec.md` の全件:
-- `spec_id` が valid 形式 (`^[0-9]{3}-[a-z-]+$` or `^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[A-Z]+-[a-z-]+$` or `^rev-[0-9]{3}-[A-Z]+-[a-z-]+$`)
-- `domain` が `docs/domains/<value>/charter.md` に対応する実 domain
-- `status` が valid な enum 値 (drafting / planning / tasking / implementing / reviewing / completed / migrated)
-- `targets` が valid (frontend / backend / both / null)
-- (reverse spec の場合) `bf_ids` / `sf_ids` が空配列でない
+SpecKit standard の spec.md は **YAML frontmatter を持たず、bold-field metadata** で構成される (例: `**Feature Branch**: ...`, `**Status**: Active`, `**Domain**: ...`)。本 verify は両形式を **平等に受理**:
+
+`specs/*/spec.md` の全件で、以下のいずれかの形式で metadata が記録されていること:
+
+#### Form A: SpecKit bold-field metadata (推奨、SpecKit standard 準拠)
+
+spec.md の冒頭 (見出し直後) に以下を **bold-field 形式** で記述:
+
+```markdown
+# Feature Specification: <name>
+
+**Feature Branch**: `<NNN>-<DOM>-<slug>` (or `rev-` prefix なら brownfield 作業中)
+**Created**: <YYYY-MM-DD>
+**Status**: Active | Migrated | Completed
+**Domain**: <domain name>
+**Related Principles**: <list, optional>
+**Related CDIs**: <list, optional>
+```
+
+正規表現:
+- `^\*\*Feature Branch\*\*: \`?([0-9]{3}-[A-Z]+-[a-z0-9-]+|rev-[0-9]{3}-[A-Z]+-[a-z0-9-]+)\`?` で `Feature Branch` を抽出
+- `^\*\*Domain\*\*: ([a-z][a-z-]*)` で domain 抽出 → `docs/domains/<domain>/charter.md` 実在確認
+- `^\*\*Status\*\*: (Active|Migrated|Completed|Draft)` で status 抽出
+
+#### Form B: YAML frontmatter (旧互換、新規 spec では非推奨)
+
+```yaml
+---
+spec_id: <NNN>-<DOM>-<slug>
+domain: <domain>
+status: drafting | planning | tasking | implementing | reviewing | completed | migrated
+targets: frontend | backend | both | null
+---
+```
+
+正規表現:
+- `^spec_id:\s*([0-9]{3}-[a-z-]+|rev-[0-9]{3}-[A-Z]+-[a-z-]+)`
+- `^domain:\s*([a-z][a-z-]*)`
+- `^status:\s*(drafting|planning|tasking|implementing|reviewing|completed|migrated)`
+
+#### 検証ロジック
+
+```bash
+for spec in specs/*/spec.md; do
+  # Form A check (priority)
+  feature_branch=$(grep -E '^\*\*Feature Branch\*\*' "$spec" | head -1)
+  status=$(grep -E '^\*\*Status\*\*' "$spec" | head -1)
+  domain=$(grep -E '^\*\*Domain\*\*' "$spec" | head -1)
+
+  # Fallback to Form B
+  if [ -z "$feature_branch" ]; then
+    feature_branch=$(awk '/^---$/{c++; next} c==1{print}' "$spec" | grep -E '^spec_id:')
+    status=$(awk '/^---$/{c++; next} c==1{print}' "$spec" | grep -E '^status:')
+    domain=$(awk '/^---$/{c++; next} c==1{print}' "$spec" | grep -E '^domain:')
+  fi
+
+  [ -z "$feature_branch" ] && echo "warning: $spec has neither bold-field nor YAML metadata"
+  # ... domain charter 実在確認, status enum 確認
+done
+```
+
+両形式とも不在なら `warning` (新規 SpecKit-day-1 spec はかなりの確率で Form A、brownfield migrate 経由は Form A の確率が高い)。
 
 ### 2.2 bf_ids / sf_ids の code references
 
@@ -86,18 +142,214 @@ grep -rn 'BF-001' <referenced files>
 - registry にあるが agent file なし → `fail` (broken registry)
 - agent file はあるが registry に未登録 → `warning` (手動配置の可能性)
 
-### 2.5 `.specify/.agents-registry.yaml` ↔ `.claude/agents/` の一致 (Wave 4 新規)
+### 2.6 Finalize-cleanliness check (Wave 6、resolves "作業メタが SSoT に残る" 問題)
+
+migrate Phase 6 (Finalize) が走った後の **本体 file (charter / spec / constitution / glossary / discovery) に作業メタが残っていないか** を検証。
+
+```bash
+# 検査対象 file (Phase 6 で finalize される最終 SSoT)
+# 注: Phase 6 完了後は specs/rev-*/ は存在せず specs/<NNN>-<DOM>-<slug>/ に rename されている
+FINAL_ARTIFACTS=(
+  docs/discovery.md
+  docs/domains/*/charter.md
+  docs/domains/_overview.md
+  specs/[0-9]*/spec.md       # rev- prefix が rename 済の前提
+  specs/[0-9]*/plan.md
+  specs/[0-9]*/tasks.md
+  .specify/memory/constitution.md
+  docs/glossary.md
+)
+
+# rev- prefix / bf_ids / sf_ids 残存検知 (resolves "rev- が永続化する" 問題)
+REV_RESIDUE_CHECK=(
+  # Phase 6 後に存在すべきでない pattern
+  'specs/rev-[0-9]'                # dir 名
+  '^spec_id:\s*rev-'               # frontmatter
+  '^bf_ids:'
+  '^sf_ids:'
+)
+
+# 禁止 pattern (作業メタの残存検知)
+FORBIDDEN_PATTERNS=(
+  '\[observed\]'         # inline tag
+  '\[aspiration\]'
+  '\[NOT-observed\]'
+  '\(推定\)'              # 旧マーカー
+  '^story_type:'         # frontmatter
+  '^confidence:'
+  '^needs_human_review:'
+  '^bf_ids:'
+  '^sf_ids:'
+  '^generated_by:'
+  'BOOTSTRAP_SECTION_'
+  'MIGRATE_SECTION_'
+  '## Implementation evidence'
+  '## Project quality score'
+  '## Statistics'
+  '## Existing violations summary'
+)
+
+# Migration disclaimer 残存検知 (NON-NEGOTIABLE、SpecKit 初日運用との区別不可能性が goal)
+# 注: HTML comment (<!-- ... -->) は許容、markdown body text として残存しているもののみ検出
+DISCLAIMER_PATTERNS=(
+  'Migrated from existing implementation'
+  '本書は既存コードと git 履歴から逆生成された'
+  '本書は逆生成'
+  'reverse-engineered from existing'
+  'Recovered from code observation'
+  'Validate against current architecture'
+  'spec-reverser が生成'
+  'This document records OBSERVED BEHAVIOR'
+  'Plan reverse-engineered'
+  'All tasks are pre-checked since the feature is already implemented'
+  'NOT user research'
+)
+
+# code-centric 参照の検出 (warning レベル、完全禁止は難しいため heuristic)
+WARNING_PATTERNS=(
+  ':[0-9]+\)'    # path:line 形式 (e.g., "lib/auth.ts:42")
+  ':[0-9]+-[0-9]+\)'  # path:line-line range
+)
+```
+
+各 final artifact に対して:
+
+1. `FORBIDDEN_PATTERNS` に該当する行があれば **`fail`** (severity: high)
+2. `WARNING_PATTERNS` に該当する行があれば `warning` (path:line が説明上必要な場合があるため)
+3. `.migration-trace.md` ファイルの **対応存在** をチェック:
+   - finalized artifact (e.g., `docs/domains/<name>/charter.md`) があるが対応する `.migration-trace.md` が **無い** → `warning` ("migrate Phase 6 を経由していない可能性")
+   - `.migration-trace.md` 自身は本検査の対象外 (作業メタ込みで OK)
+4. **`rev-` prefix 残存検査** (NON-NEGOTIABLE):
+   - `find specs/ -type d -name 'rev-*'` で 1 件以上 → **`fail`** ("Phase 6 finalize の rev- rename が走っていない")
+   - `grep -rn 'spec_id:\s*rev-' specs/` で 1 件以上 → **`fail`**
+   - `grep -rn '^bf_ids:\|^sf_ids:' specs/ --include='spec.md' --include='plan.md' --include='tasks.md'` で 1 件以上 → **`fail`** (`.migration-trace.md` は除外)
+   - cross-reference 残存: `grep -rn 'rev-[0-9]' docs/ README.md CHANGELOG.md` で 1 件以上 (`.migration-trace.md` を除く) → **`fail`** ("rename 時の参照書換漏れ")
+5. **frontmatter cleanliness 検査**: `spec.md` の frontmatter 内に `story_type:` / `confidence:` / `needs_human_review:` / `generated_by:` のいずれかが残存 → **`fail`**
+6. **Disclaimer / migration language 残存検査** (NON-NEGOTIABLE、resolves "SpecKit 初日運用と区別がつく" 問題):
+   - 各 final artifact について `DISCLAIMER_PATTERNS` を `grep -F` で検査 (`.migration-trace.md` は除外)
+   - HTML comment 内 (`<!-- ... -->`) は対象外 (renderer 上不可視のため許容)
+   - 検出 1 件以上 → **`fail`** ("migration disclaimer が body 中に残存。Phase 6 finalize の rewrite が不完全")
+7. **Feature coverage 検査** (resolves "一部しか作られない" 問題):
+   - `git log --pretty=format:'%s' --all | grep -ciE '^feat\(|^feature:|implement |add '` で主要 feature commit 数を推定
+   - `specs/[0-9]*/spec.md` 件数と比較し、推定 feature 数の **70% 未満なら `warning`**
+   - migration trace の `## Feature enumeration` section (Phase 3.0 出力) と spec 件数を突合 (trace に列挙されたのに spec が無い → `warning`)
+
+verify-report に Section 追加:
+
+```markdown
+## Phase 2.6: Finalize-cleanliness check
+
+| Artifact | forbidden hits | path:line hits | trace 存在 | verdict |
+|---|---|---|---|---|
+| docs/discovery.md | 0 | 2 | yes | warning (2 path:line refs) |
+| docs/domains/<domain>/charter.md | 3 ([aspiration], confidence:, BOOTSTRAP_SECTION_) | 5 | yes | **fail** |
+| specs/<NNN>-<DOMSHORT>-<slug>/spec.md | 0 | 0 | yes | pass |
+| .specify/memory/constitution.md | 1 (Existing violations summary section) | 0 | yes | **fail** |
+```
+
+`fail` 検出 → `overall_status: fail` (warning に降格しない、resolves SSoT 品質要件)。
+
+修正案内: "Phase 6 (Finalize) を再実行してください: `/spec-gate migrate --resume-from 6`"
+
+### 2.5 `.specify/.agents-registry.yaml` ↔ `.claude/agents/` の一致 (Wave 4 / Wave 5 follow-up 2026-05-23)
 
 ```bash
 source .specify/scripts/gate-common.sh
-gate_common::registry_load   # 18 agent name を返す
+gate_common::registry_load   # 19 agent name (main + external) を返す
 # 各 agent について registry_assert_agent を実行
 ```
 
-- registered だが `.claude/agents/<name>.md` 不在 → `fail`
-- `.claude/agents/<name>.md` あるが registry 未登録 → **explicit note 必須** (resolves B-3 medium):
-  - "Unregistered agents (N): <list>" を verify-report に記載
-  - "意図的に未登録 (brownfield specialist 等)" の場合は `reviewers.yml` 側に `intentionally_unregistered: <reason>` の comment を要求
+判定ロジック (Wave 5 follow-up で 3 way classification 化、resolves #17 / #20):
+
+1. **`agents:` main section に registered だが `.claude/agents/<name>.md` 不在** → `fail` (broken registry)
+   - 例外: `agents:` の entry が `status: optional` かつ `disabled_optional_reviewers:` section にも記載あり → `pass` (project が意図的に未採用)
+2. **`agents:` main section に registered + `.claude/agents/<name>.md` 実在** → `pass`
+3. **`.claude/agents/<name>.md` 実在 + `agents:` main section に未登録** → 次の sub-check:
+   - `external_agents:` section に登録あり + `name` 一致 → `pass` (spec-gate 外 agent として明示)
+   - どちらにも記載なし → `warning` ("Unregistered agent: 適切な section (`external_agents` or `agents`) に登録してください")
+4. **`disabled_optional_reviewers:` section に記載 + `.claude/agents/<name>.md` 実在** → `warning` ("disabled とマークされているが file 残存、削除推奨")
+
+verify-report の "Phase 2.5: agent registry consistency" に table 形式で出力:
+
+```markdown
+| Agent | location | status | verdict |
+|---|---|---|---|
+| security-reviewer | agents (bootstrap-required) | file exists | pass |
+| database-reviewer | disabled_optional_reviewers | file absent (intentional) | pass |
+| openapi-contract-reviewer | disabled_optional_reviewers | file absent (intentional) | pass |
+| serena-expert | external_agents | file exists | pass |
+| my-custom-agent | none | file exists | **warning** (suggest: add to external_agents) |
+```
+
+### 2.5b CDI SSoT cross-check (Wave 5 follow-up 2026-05-23、resolves #19)
+
+`.specify/cdi.yml` (CDI SSoT) と各 doc / spec の CDI 言及が整合しているか機械検証:
+
+```python
+import yaml, re, pathlib
+
+cdi_file = pathlib.Path('.specify/cdi.yml')
+if not cdi_file.exists():
+    print("warning: .specify/cdi.yml not found, Phase 2.5b skipped")
+    sys.exit(0)
+
+cdi_data = yaml.safe_load(cdi_file.read_text())
+registered_cdis = set((cdi_data.get('cdis') or {}).keys())
+
+# 1. 各 CDI の owner / involves / referenced_in が埋まっているか
+issues = []
+for cdi_id, meta in (cdi_data.get('cdis') or {}).items():
+    if not meta.get('owner') or meta.get('owner') == 'undecided':
+        issues.append(f"warning: {cdi_id} has no confirmed owner")
+    if not meta.get('involves'):
+        issues.append(f"warning: {cdi_id} has empty involves list")
+    if not meta.get('statement'):
+        issues.append(f"fail: {cdi_id} has no statement")
+
+# 2. 各 referenced_in path が実在 + 当該 CDI を実際に grep で確認
+for cdi_id, meta in (cdi_data.get('cdis') or {}).items():
+    for ref in (meta.get('referenced_in') or []):
+        if not pathlib.Path(ref).exists():
+            issues.append(f"warning: {cdi_id} references nonexistent {ref}")
+        else:
+            content = pathlib.Path(ref).read_text()
+            if cdi_id not in content:
+                issues.append(f"warning: {cdi_id} not found in {ref} body (referenced_in stale)")
+
+# 3. doc / spec body に登場する CDI-NN がすべて SSoT に登録されているか (untracked CDI 検出)
+import subprocess
+found_cdis = set()
+result = subprocess.run(['grep', '-rEho', 'CDI-[0-9]{1,3}',
+                          'docs/', 'specs/', '.specify/memory/'],
+                         capture_output=True, text=True)
+for line in result.stdout.splitlines():
+    m = re.match(r'^CDI-(\d+)', line)
+    if m:
+        found_cdis.add(f"CDI-{int(m.group(1)):02d}")
+
+orphan = found_cdis - registered_cdis
+for cdi in orphan:
+    issues.append(f"warning: {cdi} referenced in body but not registered in cdi.yml")
+
+for i in issues: print(i)
+```
+
+判定:
+
+- `cdi.yml` 不在 → Phase 2.5b skip (greenfield project の可能性)
+- `statement` 不在の CDI → `fail`
+- `owner: undecided` / `involves` 空 / `referenced_in` path 不在 / body に not found → `warning`
+- 本文に CDI-NN 言及あるが cdi.yml に未登録 (orphan) → `warning` ("cdi.yml に entry 追加要")
+
+verify-report の "Phase 2.5b: CDI SSoT consistency" に table 出力:
+
+```markdown
+| CDI | owner | involves | statement | referenced_in (all exist?) | orphan? | verdict |
+|---|---|---|---|---|---|---|
+| CDI-01 | identity | 7 domains | filled | 4/4 exist | no | pass |
+| CDI-02 | infra | 5 domains | filled | 4/4 exist | no | pass |
+| CDI-10 | (undecided) | 2 domains | filled | 0/0 | no | **warning** (owner) |
+```
 
 ## Phase 3: 過不足検証 (Gap Analysis)
 
@@ -146,35 +398,63 @@ verify-report の "Glossary Usage Gaps" section に **全用語の参照件数 t
 
 `low` 比率が 50% を超える場合は `warning` (constitution-drafter の入力品質に懸念)。
 
-### 3.5 NON-NEGOTIABLE Principle 採用時の Critical 違反件数 enumeration (NEW、resolves B-3 blocker / B-5)
+### 3.5 NON-NEGOTIABLE Principle 採用時の Critical 違反件数 enumeration (Wave 5 改修 2026-05-23、`.specify/principle-baseline.yml` 読み込み方式)
 
-`.specify/memory/constitution.{md,draft.md}` の全 NON-NEGOTIABLE Principle に対し:
+`.specify/principle-baseline.yml` (bootstrap / migrate Phase 0 で install、constitution-drafter が live update) を SSoT として読み、各 Principle の `existing_violations` / `violation_threshold` / `level` を取得。本 file の所在は **constitution.md 本文と分離** されているため、Phase 6 Finalize 前後で読み場所が変わらない (Menteech pilot で観察された "constitution.md 本文と trace 間の所在 mismatch" 問題を解消)。
 
 ```bash
-for principle in <each NON-NEGOTIABLE>; do
-  pattern=$(get_bad_pattern_grep_metadata "$principle")
-  count=$(bash -c "$pattern" | wc -l)
-  paths=$(bash -c "$pattern" | head -10)
-  emit_to_report principle:$principle, existing_violations:$count, paths:$paths
-done
+baseline_file=".specify/principle-baseline.yml"
+[ ! -f "$baseline_file" ] && {
+  echo "warning: principle-baseline.yml not found, Phase 3.5 skipped" >&2
+  exit 0
+}
+
+# Parse YAML (yq or python -c で展開)
+python3 - <<'PY'
+import yaml
+with open(".specify/principle-baseline.yml") as f:
+    baseline = yaml.safe_load(f)
+
+failing = []
+for principle_id, meta in (baseline.get("principles") or {}).items():
+    level = meta.get("level")
+    violations = meta.get("existing_violations", 0)
+    threshold = meta.get("violation_threshold", 0)
+    if level == "NON-NEGOTIABLE" and violations > threshold:
+        failing.append((principle_id, violations, threshold, meta.get("paths", [])))
+
+if failing:
+    print(f"FAIL: {len(failing)} NON-NEGOTIABLE Principle(s) over threshold")
+    for p in failing:
+        print(f"  Principle {p[0]}: {p[1]} > {p[2]}")
+PY
 ```
 
-**Hard gate**: いずれかの NON-NEGOTIABLE Principle で `existing_violations > 0` なら `overall_status: fail` (warning では不十分、resolves B-3 blocker)。
+**Hard gate** (変わらず): いずれかの NON-NEGOTIABLE Principle で `existing_violations > violation_threshold` なら `overall_status: fail`。
+
+ただし **Brownfield baseline accommodation** (Wave 5 新規):
+
+`.specify/principle-baseline.yml` の summary section に `baseline_snapshot_at` (Phase 4 完了日時) を保存。verify は以下の 2 区分で扱う:
+
+1. **Baseline violations** (`existing_violations` ≤ baseline 値): "known migration baseline、remediation 進行中" として `fail` だが additional context 表示
+2. **New violations** (`existing_violations` > baseline 値): **真の regression**、別途警告
 
 判定 table を verify-report に必須記録:
 
 ```markdown
-## Phase 3.5: NON-NEGOTIABLE Principle 採用時の Critical 違反件数
+## Phase 3.5: NON-NEGOTIABLE Principle 採用時の Critical 違反件数 (`.specify/principle-baseline.yml` 経由)
 
-| Principle | existing_violations | violation_threshold | verdict | paths (top 5) |
-|---|---|---|---|---|
-| I | 4 | 0 | **fail** | apps/functions/src/stripe/connect.js:181, ...:241, ... |
-| II | 0 | 0 | pass | (none) |
-| XI | 7 | 0 | **fail** | apps/mobile/lib/data/services/review_completion_service_impl.dart:17, ... |
-| **Total fail** | **2 Principle** | — | — | — |
+| Principle | existing_violations | baseline_snapshot | violation_threshold | verdict | regression? | paths (top 5) |
+|---|---|---|---|---|---|---|
+| I | 4 | 4 (2026-05-23) | 0 | **fail (baseline)** | no | <module>/<file>:<line>, ... |
+| II | 0 | 0 (2026-05-23) | 0 | pass | no | (none) |
+| III | 6 | 4 (2026-05-23) | 0 | **fail (regression)** | yes (+2) | <module>/<file>:<line>, ... |
+| **Total fail** | 2 (1 baseline、1 regression) | — | — | — | — | — |
 ```
 
-採用 metadata 不在の NON-NEGOTIABLE Principle (旧仕様で書かれた Principle) は `warning` + "adoption_metadata 追加を推奨" 案内。
+採用 metadata 不在の NON-NEGOTIABLE Principle (旧仕様で書かれた Principle) は `warning` + "principle-baseline.yml 追加を推奨" 案内。
+
+**verify pass への path**: 各 Principle の remediation feature が pr-gate を通過するたびに、本 baseline の `existing_violations` を decrement (該当 spec の Polish tasks に "Principle <I> の existing_violations を <N-1> に decrement" を含める)。0 到達で Phase 3.5 が pass に転じる。
 
 ## Phase 4: 開発 Ready チェック (Dry-Run)
 
@@ -229,28 +509,43 @@ bash .specify/scripts/gate-common.sh version >/dev/null && echo "gate-common ver
 - 環境変数 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 等の hardcode 検出 (`grep -rE 'sk-[a-zA-Z0-9]{32,}'`)
 - 検出されれば `fail` (secret leak)
 
-### 4.5b: Orchestration runtime check (Wave 4、resolves B-3 high)
+### 4.5b: Orchestration runtime check (Wave 4、Wave 5 で fail → warning 降格 2026-05-23)
 
 monorepo orchestration tool (`go-task/task`, `nx`, `turbo`, `lerna`) が `Taskfile.yml` / `nx.json` / `turbo.json` / `lerna.json` から検出された場合、その実体 binary が `which` で存在するか確認:
 
-- `Taskfile.yml` あり、`task` 未インストール → **`fail` (dev-ready: fail)** (resolves B-3 high の warning 止まり問題)
-- `nx.json` あり、`nx` 未インストール → fail
-- `turbo.json` あり、`turbo` 未インストール → fail
+- `Taskfile.yml` あり、`task` 未インストール → **`warning` (dev env 依存)**
+- `nx.json` あり、`nx` 未インストール → warning
+- `turbo.json` あり、`turbo` 未インストール → warning
 
-monorepo の主要 entry が機能不全 → dev-ready を保証できないため fail。
+これらは **個人の dev environment 依存** であり、project 自体の健全性 (`overall_status`) を fail に降格させるべきではない (Wave 5 改修、Menteech pilot で観察された "WSL 環境で task 未インストール → 自動 fail" 問題を解消)。
+
+ただし以下の場合は **`fail`** に escalate:
+
+- `--strict` mode (warning も fail に escalate される)
+- 同時に `package.json` の `scripts.test` / `scripts.build` 等の primary entry が **すべて** orchestration tool 経由でしか実行できない場合 (代替 entry なし、project が orchestration tool 必須設計)
+
+verify-report の Phase 4.5b section に必須記録:
+
+```markdown
+| Tool | manifest | binary | verdict |
+|---|---|---|---|
+| task | Taskfile.yml (exists) | (NOT FOUND) | warning (dev env 依存、`brew install go-task` or `curl ... | sh` で解消) |
+```
+
+orchestration runtime missing は **個人環境問題** として通知、`overall_status` は他要因がなければ pass。
 
 ### 4.6: Static file 404 check (Wave 4 新規、resolves B-8 blocker)
 
 外部 service redirect URL / OAuth callback / Stripe Connect onboarding return URL 等の **静的ファイルの物理存在** を確認:
 
 ```bash
-# 例: Stripe Connect onboarding return URL の指す path
-# `apps/functions/src/stripe/connect.js` を Grep し
-#   returnUrl: 'https://menteech.com/stripe/onboarding-complete'
+# 例: 外部サービス連携の return URL の指す path
+# 関連 module (`<service-integration-module>/<file>`) を Grep し
+#   returnUrl: 'https://<project-domain>/<service>/<callback-path>'
 # のような URL を抽出し、対応する static file の存在を確認
 
 for url in $(extract_return_urls); do
-  path=$(url_to_local_path "$url")  # e.g., sites/homepage/stripe/onboarding-complete.html
+  path=$(url_to_local_path "$url")  # e.g., <static-site-dir>/<service>/<callback-path>.html
   if [ ! -f "$path" ]; then
     echo "fail: $url → $path (file missing)"
   fi
@@ -258,13 +553,27 @@ done
 ```
 
 検出パターン:
-- Stripe Connect: `returnUrl` / `refreshUrl` flags
-- OAuth callback: `redirect_uri` / `callback_url`
+- 外部 PSP / 認証 federation: `returnUrl` / `refreshUrl` / `redirect_uri` / `callback_url` flags
 - 設定 file 内の HTTPS path
 
-不在 → **`fail`** (UX が成立しない、resolves B-8 Stripe 404 問題)。
+不在 → **`fail`** (UX が成立しない、resolves B-8 "外部サービス redirect 先 404" 問題)。
 
 verify-report の "Phase 4.6: Static URL existence check" に table 出力。
+
+### 4.7: Workflow self-drift detection (Wave 5 新規 2026-05-23、resolves "verify spec 自体が drift する" 問題)
+
+verify は project を verify するだけでなく、**自身が依存する spec の整合性も meta-check** する。verify の robustness を保つため、以下を検証:
+
+| Check | Method | Verdict |
+|---|---|---|
+| `.specify/principle-baseline.yml` 存在 | `[ -f ]` | 不在 → warning (Phase 3.5 が skip される) |
+| `.specify/.id-registry.json` 存在 | `[ -f ]` | 不在 → warning |
+| `.specify/locale` 存在 (Wave 5) | `[ -f ]` | 不在 → warning ("`echo ja > .specify/locale` で作成推奨") |
+| spec.md form distribution | bold-field vs YAML frontmatter の数を count | 両方混在で 30% 超なら warning ("Form 統一推奨") |
+| `.migration-trace.md` companion check | brownfield migrate 経由 spec で trace 不在 | 不在 → warning ("Phase 6 が走っていない可能性") |
+| Phase 6 が走った形跡 | `.specify/.migrate-snapshots/phase-6-post/` 存在 | brownfield + 不在 → warning |
+
+各 warning は `recommend actions` section に修正 command を併記。verify は自身の信頼性に **正直であるべき** (self-drift を隠さない)。
 
 ## Phase 5: レポート出力
 
@@ -334,6 +643,7 @@ overall_status: <ready | warning | fail>
 - **warning**: 1+ warning、ただし fail なし。`--strict` モードでは **warning も fail に escalate される** (resolves item 22)
 - **fail**: 以下のいずれかで決定:
   - Phase 1 / 2 で `fail` 検出
+  - **Phase 2.6 で finalize-cleanliness fail** (作業メタが本体 SSoT に残存、resolves "draft が SSoT に紛れ込む" 問題)
   - **Phase 3.5 で NON-NEGOTIABLE Principle existing_violations > 0** (resolves B-3 blocker、warning に降格しない)
   - Phase 4.5b で orchestration runtime missing (resolves B-3 high)
   - Phase 4.6 で static URL 404 (resolves B-8 blocker)

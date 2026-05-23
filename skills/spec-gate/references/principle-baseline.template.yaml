@@ -1,0 +1,69 @@
+# Spec-Driven Gating Workflow — Principle Baseline (template)
+#
+# 配置:
+#   /spec-gate bootstrap (greenfield) または /spec-gate migrate Phase 0 (brownfield) で
+#   `.specify/principle-baseline.yml` として target project に install。
+#
+# 用途:
+#   各 Constitution Principle の existing_violations / bad_pattern_grep / paths を
+#   constitution.md 本文と分離し、本 file を SSoT とする。
+#
+#   理由 (Menteech pilot retrospective 2026-05-23):
+#     - constitution.md 本文に書くと Phase 6 finalize で trace に移送 →
+#       verify Phase 3.5 が読み場所を見失う矛盾が発生
+#     - 件数は remediation で変動するため、本来 const ではなく live data
+#     - principle 本文 (Statement / Why / Examples / Verification) は永続 SSoT、
+#       baseline 数値は本 file で運用フェーズ管理
+#
+# 検証:
+#   /spec-gate verify Phase 3.5 が本 file の `existing_violations` を読み、
+#   `> 0` の NON-NEGOTIABLE Principle があれば overall_status: fail (Brownfield 直後は想定通り)
+#
+#   remediation 完了時は本 file の数値を 0 に更新 → verify pass に変わる
+#
+# 編集ポリシー:
+#   - bootstrap / migrate Phase 4 (constitution-drafter) が初期値を install
+#   - remediation feature 実装後、当該 spec の pr-gate 通過時に該当 Principle の
+#     existing_violations を decrement (実装計画では tasks.md の Polish phase に組込)
+#   - 手動編集は AskUserQuestion gated (verify Phase 3.5 結果と直接結びつくため)
+
+version: 1
+schema_url: https://github.com/yukiyamato/spec-driven-gating-workflow/blob/main/docs/principle-baseline-schema.md
+generated_at: "<filled by bootstrap/migrate>"
+last_updated: "<filled at most recent edit>"
+
+# 各 Principle の baseline。Constitution Principle の Roman numeral (I/II/...) でキー化。
+# 採用前の Principle は entry なし。
+principles:
+  # 例 (NON-NEGOTIABLE):
+  # I:
+  #   adoption_date: "2026-05-23"
+  #   level: NON-NEGOTIABLE   # NON-NEGOTIABLE | standard | aspirational
+  #   violation_threshold: 0  # この件数を超えると verify Phase 3.5 が fail
+  #   existing_violations: 4  # bootstrap/migrate 時点での observed 件数
+  #   bad_pattern_grep: |
+  #     (?i)(api[_-]?key|secret|token|password)\s*=\s*['\"][A-Za-z0-9_-]{16,}['\"]
+  #   paths:                  # bad_pattern_grep で hit した代表 path (top 5)
+  #     - "apps/functions/src/stripe/connect.js:181"
+  #     - "apps/functions/src/stripe/payment.js:42"
+  #   remediation_spec:       # 解消する予定の spec(s)、optional
+  #     - "001-IDN-delete-user-cascade"
+  #   notes: ""               # 任意の補足
+
+  # 例 (standard):
+  # VI:
+  #   adoption_date: "2026-05-23"
+  #   level: standard
+  #   violation_threshold: 5  # Standard は閾値緩和、漸次解消想定
+  #   existing_violations: 9
+  #   bad_pattern_grep: |
+  #     apps/functions/src/(?!.*\.test\.js) 配下 module に対応する test/.*\.test\.js が無い
+  #   notes: "高リスク module の test 不在。新規 feature spec に都度組み込んで漸次解消"
+
+# 集計情報 (verify Phase 3.5 と Phase 7 final summary で参照)
+summary:
+  total_principles: 0
+  non_negotiable_count: 0
+  failing_count: 0       # existing_violations > violation_threshold の件数
+  passing_count: 0
+  last_recalc_at: ""

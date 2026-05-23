@@ -1,0 +1,69 @@
+# Spec-Driven Gating Workflow — Cross-Domain Invariant (CDI) SSoT (template)
+#
+# 配置:
+#   /spec-gate migrate Phase 2 (charter-drafter) で `.specify/cdi.yml` として install。
+#   greenfield project は新規 CDI 発生時に手動で entry 追加。
+#
+# 用途:
+#   ドメイン間に跨る不変条件 (CDI) の owner / involved domains / statement を **1 箇所** に集約する SSoT。
+#
+#   理由 (Menteech pilot retrospective 2026-05-23、resolves #19):
+#     - 旧設計: CDI は docs/domains/_overview.md / charter.md / constitution.md / spec.md の
+#       contracts/ など 4 箇所に分散記載され、変更時に同期忘れが発生
+#     - 新設計: 本 file を CDI の owner / involves / statement の SSoT とし、
+#       他の doc は本 file を `[[CDI-NN]]` 記法でリンク参照する (内容は重複させない)
+#
+# 検証:
+#   /spec-gate verify Phase 2.5b が本 file の CDI 一覧と docs/domains/_overview.md / charter / spec の
+#   CDI 言及を交差検証 (本 file に未登録の CDI-NN を doc 内で言及すれば warning)
+#
+# 編集ポリシー:
+#   - charter-drafter が migrate Phase 2 で初期 CDI を提案 + owner heuristic で entry 生成
+#   - 新規 CDI を発見した spec 起案者は本 file に entry 追加 + AskUserQuestion で owner 確定
+#   - owner 変更は ADR (`docs/decisions/<NNNN>-...md`) 経由のみ許可、本 file は SSoT 更新先
+
+version: 1
+schema_url: https://github.com/yukiyamato/spec-driven-gating-workflow/blob/main/docs/cdi-schema.md
+generated_at: "<filled by charter-drafter via migrate Phase 2>"
+last_updated: "<filled at most recent edit>"
+
+# 各 CDI の SSoT entry。CDI-NN (NN は連番) でキー化。
+cdis:
+  # 例:
+  # CDI-01:
+  #   statement: "ユーザ退会を sync fail-fast で実施、部分退会状態を作らない"
+  #   involves: [identity, billing, payout, messaging, calling, mentoring, infra]
+  #   owner: identity           # 必須 (`undecided` は migrate Phase 2 完了時点で不可)
+  #   ownership_rationale: |    # owner 決定理由 (heuristic / user decision / ADR)
+  #     identity が deleteUser callable の orchestrator として全 cascade step を sync 起動するため、
+  #     fat orchestrator pattern の owner として確定 (2026-05-23 user decision)
+  #   referenced_in:            # 本 CDI を引用する artifact (cross-check 対象)
+  #     - docs/domains/identity/charter.md
+  #     - docs/domains/_overview.md  # "Cross-Domain Invariants" section
+  #     - .specify/memory/constitution.md  # "Principle III" Statement
+  #     - specs/001-IDN-delete-user-cascade/spec.md   # Related CDIs metadata
+  #   adr:                      # 関連 ADR (任意)
+  #     - docs/decisions/0042-cascade-pattern.md
+  #   priority: blocking        # blocking / important / cosmetic
+
+  # CDI-02:
+  #   statement: "管理/金融 event を単一 audit_logs collection + BigQuery sink で記録"
+  #   involves: [infra, billing, payout, moderation, identity]
+  #   owner: infra
+  #   ownership_rationale: |
+  #     audit_logs collection / BigQuery sink は infra ドメインが管轄する shared infrastructure。
+  #     書込権限は append-only、Firestore rules で update/delete deny (2026-05-23 確定)
+  #   referenced_in:
+  #     - docs/domains/infra/charter.md
+  #     - docs/domains/_overview.md
+  #     - .specify/memory/constitution.md  # Principle IV
+  #     - specs/006-INF-audit-log-foundation/spec.md
+  #   priority: blocking
+
+# 集計情報 (verify Phase 2.5b で参照)
+summary:
+  total_cdis: 0
+  with_confirmed_owner: 0
+  with_undecided_owner: 0     # > 0 なら Phase 2 完了基準を満たさない (warning)
+  blocking_open_questions: 0
+  last_recalc_at: ""

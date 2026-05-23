@@ -1,12 +1,26 @@
 ---
 domain: <kebab-case-name>
-status: <draft | needs-human-review | active>
+status: <draft | active>
 owner: <team or person>
-generated_by: <human | /spec-gate.migrate Phase 2>
 last_reviewed: <ISO 8601>
 related_adrs: []
 related_specs: []
 ---
+
+<!--
+本ファイルは **最終 SSoT (final form)** であり、product / UX / business 主軸で書く。
+
+✗ 含めてはならない (作業メタ、別セッションで読まれる際のノイズ):
+   - path:line 参照、クラス名 / 関数名 / 行数
+   - [observed] / [aspiration] / [NOT-observed] / (推定) インラインタグ
+   - confidence: / story_type: / needs_human_review: / bf_ids: / sf_ids: frontmatter
+   - "## Implementation evidence" section
+
+✓ Migration 作業時の audit / evidence は `.migration-trace.md` (同 dir) に隔離する。
+   IDE で `.migration-trace.md` を別途参照すれば過去の判定経緯を追跡できる。
+
+✓ Draft 状態 (status: draft) の charter は人間レビュー後 status: active に昇格させる。
+-->
 
 # Domain Charter: <Domain Name>
 
@@ -93,10 +107,11 @@ NON-NEGOTIABLE な不変条件は Constitution Principle として昇格すべ�
 
 ## Open Questions
 
-(レビュー中で未決の論点)
+(現時点で未決の論点。priority 必須。確定したら本文化 or trace 移送)
 
-- [ ] <question 1>
-- [ ] <question 2>
+- [ ] **priority: blocking** — <question 1>
+- [ ] **priority: important** — <question 2>
+- [ ] **priority: cosmetic** — <question 3>
 
 ## Principles (domain-specific, optional)
 

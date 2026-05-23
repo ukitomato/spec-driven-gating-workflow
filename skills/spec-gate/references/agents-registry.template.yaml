@@ -110,6 +110,14 @@ agents:
     managed_by: workflow
     invoked_by: [migrate]
 
+  - name: phase-6-finalizer
+    status: migrate-required
+    role: brownfield
+    placement: .claude/agents/phase-6-finalizer.md
+    purpose: "Phase 6 Finalize atomic operation (dir rename + cross-ref update + trace generation + fence cleanup)"
+    managed_by: workflow
+    invoked_by: [migrate]
+
   # ─── Actors (code-gate auto-fix loop) ───────────────────────────────
   - name: implementer
     status: implementation-required
@@ -180,3 +188,49 @@ agents:
     managed_by: workflow
     invoked_by: [code-gate, pr-gate]
     install_hint: "UI framework 検出時 (a11y と並行) で推奨"
+
+# ─── External agents (Wave 5 follow-up 2026-05-23、resolves #17) ──────
+#
+# `.claude/agents/` に存在するが spec-gate workflow 配下ではない agent を、
+# verify が "未登録" として warning しないように本 section に登録する。
+#
+# 用途例:
+# - serena-expert (Claude Code 既存 agent)
+# - 組織固有の reviewer / actor (社内ガイドラインで個別配備)
+# - user-installed third-party agent
+#
+# 編集ポリシー:
+# - workflow は本 section を **書き換えない** (managed_by: user)
+# - verify Phase 2.5 は本 section の name と `.claude/agents/<name>.md` を一致確認、
+#   一致すれば pass (warning なし)、不一致なら warning ("external agent name mismatch")
+#
+external_agents:
+  # 例:
+  # - name: serena-expert
+  #   placement: .claude/agents/serena-expert.md
+  #   purpose: "Elite app development via /serena (Claude Code builtin)"
+  #   managed_by: user
+  #   intentionally_unregistered: "Claude Code 既存 agent、spec-gate 外"
+
+# ─── Disabled-by-project optional reviewers (Wave 5 follow-up、resolves #20) ──
+#
+# bootstrap が optional reviewer を deploy 推奨したが、project が "non-applicable"
+# と判定したものをここに list する。verify Phase 2.5 が "registry にあるが
+# `.claude/agents/` に不在" warning を出すのを防ぐ。
+#
+# 例: Firestore project では database-reviewer (SQL/RLS 前提) は不適合 →
+#     disabled に moved + reason 記録
+#
+# 編集ポリシー:
+# - `/spec-gate.add-reviewer --disable <name>` で entry が追加される
+# - 後日 enable に戻すには本 section から削除 + main `agents:` の status を optional に戻す
+#
+disabled_optional_reviewers:
+  # 例:
+  # - name: database-reviewer
+  #   disabled_at: "2026-05-23"
+  #   reason: "Firestore + RTDB のみ使用 (リレーショナル DB なし)、SQL/RLS template が非適合"
+  #
+  # - name: openapi-contract-reviewer
+  #   disabled_at: "2026-05-23"
+  #   reason: "openapi.yaml / swagger.yaml がプロジェクトに存在しない"
